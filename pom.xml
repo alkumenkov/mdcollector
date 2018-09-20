@@ -12,20 +12,17 @@
     <url>http://maven.apache.org</url>
 
     <properties>
-        <project.build.sourceEncoding>windows-1250</project.build.sourceEncoding>
+        <project.build.sourceEncoding>windows-1251</project.build.sourceEncoding>
         <maven.compiler.source>1.8</maven.compiler.source>
         <maven.compiler.target>1.8</maven.compiler.target>
     </properties>
 
     <repositories>
-       
-        
-     <!--   <repository>
+       <repository>
           <id>our_repository</id>
-           <url>http://213.208.183.34:20080/our_repository</url> 
-        </repository>-->
-        
-        
+          <url>file:///media/public/our_repository/</url>
+          <!-- <url>https://yadi.sk/d/2r3brnKsH7zFCw/</url> -->
+        </repository>
     </repositories>
 
     <build>
