@@ -75,11 +75,11 @@ public class TLocalMdataTable {
 	
 	/**
 	 * Method adds new client to some instrument included in the table of instruments
-	 * @param aSocket socket, via him  will be dialog between tavle and client
+	 * @param aSocket socket, via him  will be dialog between table and client
 	 */
 	public void addListener( Socket aSocket ) {
 		try {
-			SocketChannel lsCh= aSocket.getChannel();
+			SocketChannel lsCh = aSocket.getChannel();
 			
 			BufferedReader ins = new BufferedReader(new InputStreamReader(aSocket.getInputStream()));
 			

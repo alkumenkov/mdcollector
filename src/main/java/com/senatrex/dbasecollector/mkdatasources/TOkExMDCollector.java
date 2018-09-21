@@ -5,7 +5,7 @@
  */
 package com.senatrex.dbasecollector.mkdatasources;
 
-import com.alk.netwrappers.ClientWebSocketEndpoint;
+//import com.alk.netwrappers.ClientWebSocketEndpoint;
 import com.alk.netwrappers.TNormalWebSocket;
 import com.alk.netwrappers.TWebSocketable;
 //import com.binance.api.client.BinanceApiClientFactory;
@@ -100,7 +100,7 @@ public class TOkExMDCollector extends TAbstractMkDataCollector implements TWebSo
        // lDepthRespone += String.format("%s@depth/", ("ETHBTC").toLowerCase());
       //  lDepthRespone += String.format("%s@trade/", ("ETHBTC").toLowerCase());
       //  initializeDepthCache( ("ETHBTC") );
-       String lMessageToSend="";
+        String lMessageToSend="";
         ConnectToServer();
         if( fDepthRespone != null && fInstruments!=null ){            
             for( String[] lRes:fInstruments ){
