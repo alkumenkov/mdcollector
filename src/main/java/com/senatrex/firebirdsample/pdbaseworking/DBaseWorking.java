@@ -83,21 +83,17 @@ public class DBaseWorking {
 		try{
 			Class.forName( fDriverPath );
 			if( fIsKeepAlive ) {
-				lConnection = fConnection;
+                            lConnection = fConnection;
 			} else {
-				lConnection = DriverManager.getConnection( fConnectionString, fLogin, fPassword );
+                            lConnection = DriverManager.getConnection( fConnectionString, fLogin, fPassword );
 			}
 						
 			lStatement = lConnection.createStatement( );			
 			int lUpdateResuilt = lStatement.executeUpdate( aQuery );				
 			if( lUpdateResuilt == 1 ) {
-				oResuilt = true;
-				fLastEcxeption = "";
+                            oResuilt = true;
+                            fLastEcxeption = "";
 			}	
-			
-			if( !fIsKeepAlive ) {
-				lConnection.close( );
-			}
 			
 		} catch ( Exception e ) {
 			fLastEcxeption =  e.getClass( ).getName( ) + ": " + e.getMessage( );
@@ -108,6 +104,14 @@ public class DBaseWorking {
 				fLastEcxeption =  e.getClass( ).getName( ) + ": " + e.getMessage( );
 			}
 		}
+                
+                if( !fIsKeepAlive & lConnection != null ) {
+                    try{ lConnection.close( ); } catch ( Exception e ) {
+			fLastEcxeption =  "ExecuteUpdateQuery: "+e.getClass( ).getName( ) + ": " + e.getMessage( ) + "\t"+aQuery;
+			TAsyncLogQueue.getInstance().AddRecord( fLastEcxeption, 0 );
+                    }
+                }
+                
 		return oResuilt;
 	}
 		
@@ -142,7 +146,7 @@ public class DBaseWorking {
 			fLastEcxeption = "";
 			lConnection.close( );
 		} catch ( Exception e ) {
-			fLastEcxeption =  e.getClass( ).getName( ) + ": " + e.getMessage( ) ;
+			fLastEcxeption = "GetQueryAsTable: " +  e.getClass( ).getName( ) + ": " + e.getMessage( ) + aQuery;
 			TAsyncLogQueue.getInstance().AddRecord( fLastEcxeption, 0 );
 		}
 		

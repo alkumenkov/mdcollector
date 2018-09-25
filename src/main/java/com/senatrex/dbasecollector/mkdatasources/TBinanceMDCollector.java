@@ -278,16 +278,16 @@ public class TBinanceMDCollector extends TAbstractMkDataCollector implements TWe
             JSONObject lResponse = new JSONObject( aMessage );
             JSONObject lData = lResponse.getJSONObject("data");
             if(lData.getString("e").equals("depthUpdate")){
-                lParseDepthUpdate(  lData );
+                ParseDepthUpdate( lData );
             }
             
             if(lData.getString("e").equals("trade")){
-                lParseTradeResponse(  lData );
+                ParseTradeResponse( lData );
             }
         }
     }
 
-    private void lParseDepthUpdate( JSONObject aResponse ){
+    private void ParseDepthUpdate( JSONObject aResponse ){
         String lRespSymbol = aResponse.getString("s");
         Long lLastUpdateId = fUpdateIdMap.get( lRespSymbol );
       /*  if( ( lLastUpdateId == null || lLastUpdateId != ( aResponse.getLong("U")-1 ) ) ){
@@ -329,7 +329,7 @@ public class TBinanceMDCollector extends TAbstractMkDataCollector implements TWe
         return oRes;
     }    
     
-    private void lParseTradeResponse( JSONObject aResponse ){
+    private void ParseTradeResponse( JSONObject aResponse ){
         String lRespSymbol = aResponse.getString("s");
         int lSide = -1;
         double lPrice = 0.0;

@@ -38,9 +38,9 @@ import org.json.JSONObject;
  */
 public class TOkExMDCollector extends TAbstractMkDataCollector implements TWebSocketable{
 
-    private long lastUpdateId;
+    private long fLastUpdateId;
     private Map<String,Long> fUpdateIdMap = new HashMap<>();
-    private Map<String, HashMap<String, NavigableMap<BigDecimal, BigDecimal>>> depthCache = new HashMap<>();
+    private Map<String, HashMap<String, NavigableMap<BigDecimal, BigDecimal>>> fDepthCache = new HashMap<>();
 
     private Map< String, Double > fMinAmoundMap = new TreeMap<>();
     private Map< String, String > fParametersMap;
@@ -74,12 +74,12 @@ public class TOkExMDCollector extends TAbstractMkDataCollector implements TWebSo
     /**
     * Initializes the depth cache by using the REST API.
     */
-    public void initializeDepthCache( String symbol ) {
+    public void initializeDepthCache( String aSymbol ) {
 
      //   client.getMyTrades(symbol)
         HashMap<String, NavigableMap<BigDecimal, BigDecimal>> lDepthCache = new HashMap<>();
 
-        fUpdateIdMap.put( symbol, lastUpdateId );
+        fUpdateIdMap.put( aSymbol, fLastUpdateId );
 
         NavigableMap<BigDecimal, BigDecimal> asks = new TreeMap<>();
         
@@ -89,7 +89,7 @@ public class TOkExMDCollector extends TAbstractMkDataCollector implements TWebSo
         
         lDepthCache.put(BIDS, bids);
 
-        this.depthCache.put( symbol, lDepthCache );
+        this.fDepthCache.put( aSymbol, lDepthCache );
     }
 
     @Override
@@ -166,21 +166,21 @@ public class TOkExMDCollector extends TAbstractMkDataCollector implements TWebSo
     * Updates an order book (bids or asks) with a delta received from the server.
     * Whenever the qty specified is ZERO, it means the price should was removed from the order book.
     */
-    private void updateOrderBook(NavigableMap<BigDecimal, BigDecimal> lastOrderBookEntries, List<TOrderBookEntry> orderBookDeltas, NavigableMap<BigDecimal, BigDecimal> aOppositeEntries, String lMainParsing ) {
+    private void updateOrderBook(NavigableMap<BigDecimal, BigDecimal> aLastOrderBookEntries, List<TOrderBookEntry> aOrderBookDeltas, NavigableMap<BigDecimal, BigDecimal> aOppositeEntries, String aMainParsing ) {
 
-        for (TOrderBookEntry orderBookDelta : orderBookDeltas) {
+        for (TOrderBookEntry orderBookDelta : aOrderBookDeltas) {
 
             BigDecimal price = new BigDecimal(orderBookDelta.getPrice());
             BigDecimal qty = new BigDecimal(orderBookDelta.getQty());
 
             if (qty.compareTo(BigDecimal.ZERO) == 0) {
               // qty=0 means remove this level
-                if( lastOrderBookEntries.get( price ) == null ){
+                if( aLastOrderBookEntries.get( price ) == null ){
                     TAsyncLogQueue.getInstance().AddRecord( "cant remove price!no such element!price is " + price );
                 }  
-                lastOrderBookEntries.remove( price );
+                aLastOrderBookEntries.remove( price );
             } else {
-                lastOrderBookEntries.put(price, qty);
+                aLastOrderBookEntries.put(price, qty);
 
                 Set< Map.Entry<BigDecimal, BigDecimal > > Keys = aOppositeEntries.entrySet();
 
@@ -188,7 +188,7 @@ public class TOkExMDCollector extends TAbstractMkDataCollector implements TWebSo
 
                 for(int i=0; i<lPrices.length; i++){
                      BigDecimal lPrice = (BigDecimal)lPrices[i].getKey();
-                    if( lMainParsing.equals( BIDS ) ){
+                    if( aMainParsing.equals( BIDS ) ){
                         if( price.compareTo( lPrice ) > 0 ){
                             aOppositeEntries.remove( lPrice );
                         }
@@ -302,14 +302,14 @@ public class TOkExMDCollector extends TAbstractMkDataCollector implements TWebSo
                         String lChanel = lResponse.getString( "channel" );
                         String lSymbol = lChanel.substring(("ok_sub_spot_").length(), lChanel.length()-6);
                         JSONObject lData = lResponse.getJSONObject("data");
-                        lParseDepthUpdate(  lData, lSymbol );
+                        ParseDepthUpdate( lData, lSymbol );
                     }
 
                     if( lResponse.getString( "channel" ).contains( "_deals" ) ){
                         String lChanel = lResponse.getString( "channel" );
                         String lSymbol = lChanel.substring(("ok_sub_spot_").length(), lChanel.length()-6);
                         JSONArray lData = lResponse.getJSONArray("data");
-                        lParseTradeResponse(  lData, lSymbol );
+                        ParseTradeResponse( lData, lSymbol );
                     } 
                 }
             }catch(Exception e){
@@ -318,21 +318,21 @@ public class TOkExMDCollector extends TAbstractMkDataCollector implements TWebSo
         }
     }
 
-    private void lParseDepthUpdate( JSONObject aResponse, String aSymbol ){
+    private void ParseDepthUpdate( JSONObject aResponse, String aSymbol ){
         String lRespSymbol = aSymbol;
      
         if( fMinAmoundMap.get( lRespSymbol ) != null ){
 
             if(aResponse.has("asks")){
                 JSONArray lAsks = aResponse.getJSONArray( "asks" );
-                updateOrderBook( depthCache.get(lRespSymbol).get(ASKS), getOrdersList( lAsks ), depthCache.get(lRespSymbol).get(BIDS), ASKS );
+                updateOrderBook( fDepthCache.get(lRespSymbol).get(ASKS), getOrdersList( lAsks ), fDepthCache.get(lRespSymbol).get(BIDS), ASKS );
             }
             
             if(aResponse.has("bids")){
                 JSONArray lBids = aResponse.getJSONArray( "bids" );
-                updateOrderBook( depthCache.get(lRespSymbol).get(BIDS), getOrdersList( lBids ), depthCache.get(lRespSymbol).get(ASKS), BIDS );
+                updateOrderBook( fDepthCache.get(lRespSymbol).get(BIDS), getOrdersList( lBids ), fDepthCache.get(lRespSymbol).get(ASKS), BIDS );
             }
-            sendSnapShot( lRespSymbol,  depthCache.get(lRespSymbol).get(ASKS), depthCache.get(lRespSymbol).get(BIDS) );
+            sendSnapShot( lRespSymbol, fDepthCache.get(lRespSymbol).get(ASKS), fDepthCache.get(lRespSymbol).get(BIDS) );
 
         } else {
             TAsyncLogQueue.getInstance().AddRecord( "unknown symbol!" );
@@ -355,26 +355,22 @@ public class TOkExMDCollector extends TAbstractMkDataCollector implements TWebSo
         return oRes;
     }    
     
-    private void lParseTradeResponse( JSONArray aResponse, String aSymbol ){
-
-        int lSide = -1;
-        double lPrice = 0.0;
-        int lVolume = 0;
+    private void ParseTradeResponse( JSONArray aResponse, String aSymbol ){
 
         if( fMinAmoundMap.get( aSymbol ) != null ){
             int lLength = aResponse.length();
             for(int i=0; i<lLength; i++){
                 JSONArray lResponse = aResponse.getJSONArray(i);
                 try{
-                    lSide = lResponse.getString( 4 ).equals("bid")?(-1):(1);
-                    lPrice = Double.parseDouble( lResponse.getString( 1 ));
-                    lVolume = (int)( Double.parseDouble( lResponse.getString( 2 ) )/fMinAmoundMap.get( aSymbol ) );
+                    int lSide = lResponse.getString( 4 ).equals("bid")?(-1):(1);
+                    double lPrice = Double.parseDouble( lResponse.getString( 1 ));
+                    int lVolume = (int)( Double.parseDouble( lResponse.getString( 2 ) )/fMinAmoundMap.get( aSymbol ) );
+                    
+                    fMarketEventQueue.AddRecord( new TTradeMarketEvent(aSymbol, lPrice, lVolume, lSide, "okex") );
+                
                 } catch (Exception e ) {
-                    lPrice = 0.0;
-                    lVolume = 0;
-                } 
-
-                fMarketEventQueue.AddRecord(new TTradeMarketEvent(aSymbol, lPrice, lVolume, lSide, "okex"));
+                    TAsyncLogQueue.getInstance().AddRecord( "Bad trade: " +  aResponse + "\t" + e.getLocalizedMessage());
+                }
             }
             int t=0;
         }

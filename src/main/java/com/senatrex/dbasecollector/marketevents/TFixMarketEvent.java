@@ -32,9 +32,6 @@ public class TFixMarketEvent extends TAbstractMarketEvent{
 	public void updateInstrument( TAbstractInstrument aAbstractInstrument ) {
             //int lMarketDepth = aAbstractInstrument.getMarketDepth();
             try {	
-                if(aAbstractInstrument.getLocalName().contains("Si-3.17-6.17") ){
-                    TAsyncLogQueue.getInstance().AddRecord( "Si-3.17-6.17 comes", 3 );
-                }
                 
 		for( int i = 0; i < fAskArray.size(); i++ ) {
                     aAbstractInstrument.getAsk( ).get( i ).setPrice( fAskArray.get( i ).getPrice( ) );
@@ -46,8 +43,9 @@ public class TFixMarketEvent extends TAbstractMarketEvent{
                     aAbstractInstrument.getBid( ).get( i ).setVolume( fBidArray.get( i ).getVolume( ) );
 		}
 		
-		if( ( aAbstractInstrument.getAsk().get(0).getPrice()!=aAbstractInstrument.getAsk().get(0).getPrevPrice( ) ) ||
-				( aAbstractInstrument.getBid().get(0).getPrice() != aAbstractInstrument.getBid().get(0).getPrevPrice( ) )	) {
+		if( ( aAbstractInstrument.getAsk().get(0).getPrice() != aAbstractInstrument.getAsk().get(0).getPrevPrice( ) ) 
+                        ||
+                    ( aAbstractInstrument.getBid().get(0).getPrice() != aAbstractInstrument.getBid().get(0).getPrevPrice( ) ) ) {
                     ArrayList< TAbstractTcpMessaging > lListClients = aAbstractInstrument.getClients( );
                     for( int i=0; i<lListClients.size(); i++ ) {
                         if( lListClients.get( i ).isAvailable() == false ){
@@ -67,8 +65,8 @@ public class TFixMarketEvent extends TAbstractMarketEvent{
 		TDBaseQueue lDBaseQueue = TDBaseQueue.getInstance( );
 		lDBaseQueue.AddRecord( lQuery );
                 TAsyncLogQueue.getInstance().AddRecord( lQuery, 2 );
-	} catch ( Exception e ) {
-		TAsyncLogQueue.getInstance().AddRecord( e.getClass( ).getName( ) + ": " + e.getMessage( ), 0 );
-	}
+            } catch ( Exception e ) {
+                    TAsyncLogQueue.getInstance().AddRecord( "TFixMarketEvent.updateInstrument\t"+e.getClass( ).getName( ) + ": " + e.getMessage( ), 0 );
+            }
 	}
 }

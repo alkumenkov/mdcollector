@@ -97,11 +97,9 @@ public class TTradeMarketEvent extends TAbstractMarketEvent{
 			}
 		}
 		
-		//String lQuery = getDBaseQuery( aAbstractInstrument );
-		
-
-		//TDBaseQueue lDBaseQueue = TDBaseQueue.getInstance( );
-		//lDBaseQueue.AddRecord( lQuery );
+		String lQuery = getDBaseQuery( aAbstractInstrument );
+		TDBaseQueue lDBaseQueue = TDBaseQueue.getInstance( );
+		lDBaseQueue.AddRecord( lQuery );
 	}
 	
 	protected String getDBaseQuery( TAbstractInstrument aAbstractInstrument ){
