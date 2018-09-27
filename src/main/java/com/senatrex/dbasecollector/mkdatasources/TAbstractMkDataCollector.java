@@ -20,7 +20,7 @@ public abstract class TAbstractMkDataCollector implements Runnable{
 	protected int fMarketDepth;
         
         public void closeCollector(){
-        fIsClosed = true; 
+            fIsClosed = true; 
             try {
                 TMarketEventQueue.getInstance().finalize();
             } catch (Throwable ex) {

@@ -36,8 +36,11 @@ public class TPoloneixMDCollector extends TAbstractMkDataCollector implements TW
     
     private TNormalWebSocket fWS_MD = null;
     private Thread fParserThread = null;
+    private Thread fWatchDogThread = null;
     private ArrayList<String> fEvents = new ArrayList<String>();
     private Object fWaitObject = new Object();
+    private boolean fHadNewData = true;
+    private long fHeartBeatDelay = 5000;
     
     public TPoloneixMDCollector( Map< String, String > aParametersMap ) {
         super( );
@@ -58,7 +61,7 @@ public class TPoloneixMDCollector extends TAbstractMkDataCollector implements TW
     @Override
     public void run( ){
         ConnectToServer();
-        if( fWS_MD != null && fInstruments!=null ){            
+        if( fWS_MD != null && fInstruments!=null ){
             for( String[] lRes:fInstruments ){
 //                initializeDepthCache( lRes[1] );
                 String lReq = "{\"command\": \"subscribe\", \"channel\": \""+lRes[1]+"\" }";//, \"depth\": 10
@@ -69,6 +72,7 @@ public class TPoloneixMDCollector extends TAbstractMkDataCollector implements TW
             }
         }
         
+        TAsyncLogQueue.getInstance( ).AddRecord( "Poloneix parser-thread running..." );
         fParserThread = new Thread(new Runnable(){
             @Override
             public void run() {
@@ -78,6 +82,8 @@ public class TPoloneixMDCollector extends TAbstractMkDataCollector implements TW
                             fWaitObject.wait( );
                         }
                     } catch ( InterruptedException e ) {}
+                    
+                    fHadNewData = true;
                     
                     String lMessage;
                     
@@ -223,9 +229,37 @@ public class TPoloneixMDCollector extends TAbstractMkDataCollector implements TW
                 }
             }
         });
-        
         fParserThread.start();
         
+        TAsyncLogQueue.getInstance( ).AddRecord( "Poloneix WatchDog-thread running..." );
+        fWatchDogThread = new Thread(new Runnable(){
+            
+            private long GetRoundedTime(){
+                long timeMs = System.currentTimeMillis();
+                return Math.round( (double)( (double)timeMs/(double)(fHeartBeatDelay) ) ) * (fHeartBeatDelay);
+            }
+            
+            long fLastTime = GetRoundedTime();
+            
+            @Override
+            public void run() {
+                
+                while( fIsClosed == false ) {
+                
+                    if( fLastTime != GetRoundedTime() ) {
+                        if( !fHadNewData ){
+                            ConnectToServer();
+                        }
+                        
+                        fLastTime = GetRoundedTime();
+                        fHadNewData = false;
+                    }
+                    
+                    try { Thread.sleep( 1000 );} catch ( InterruptedException ex ) {;}
+                }
+            }
+        });
+        fWatchDogThread.start();
     }
     
     @Override
@@ -257,13 +291,14 @@ public class TPoloneixMDCollector extends TAbstractMkDataCollector implements TW
     }
     
     @Override
-    public void onMessage( String aMessage ){
+    public void onMessage( String aMessage ) {
         AddMessageToParse( aMessage );
     }
     
-    private void ConnectToServer(){
-        if( fWS_MD != null ){
+    private void ConnectToServer() {
+        if( fWS_MD != null ) {
             fWS_MD.disconnect();
+            TAsyncLogQueue.getInstance( ).AddRecord( "Poloneix diconnected." );
         }
         
         try {
@@ -272,6 +307,7 @@ public class TPoloneixMDCollector extends TAbstractMkDataCollector implements TW
             TAsyncLogQueue.getInstance().AddRecord( ex.getLocalizedMessage() );
         }
 
+        TAsyncLogQueue.getInstance( ).AddRecord( "Poloneix connecting..." );
         fWS_MD = new TNormalWebSocket( fServer, this );
     }
     

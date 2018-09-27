@@ -344,7 +344,7 @@ public class TBinanceMDCollector extends TAbstractMkDataCollector implements TWe
                 lPrice = 0.0;
                 lVolume = 0;
             } 
-            fMarketEventQueue.AddRecord(new TTradeMarketEvent(lRespSymbol, lPrice, lVolume, lSide, "binanceticks"));
+            fMarketEventQueue.AddRecord(new TTradeMarketEvent(lRespSymbol, lPrice, lVolume, lSide, "binance"));
             int t=0;
         }
     }
