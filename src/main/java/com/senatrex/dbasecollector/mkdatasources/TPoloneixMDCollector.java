@@ -61,16 +61,6 @@ public class TPoloneixMDCollector extends TAbstractMkDataCollector implements TW
     @Override
     public void run( ){
         ConnectToServer();
-        if( fWS_MD != null && fInstruments!=null ){
-            for( String[] lRes:fInstruments ){
-//                initializeDepthCache( lRes[1] );
-                String lReq = "{\"command\": \"subscribe\", \"channel\": \""+lRes[1]+"\" }";//, \"depth\": 10
-                TAsyncLogQueue.getInstance( ).AddRecord( "Sent to poloneix: " + lReq );
-                fWS_MD.sendMessage( 
-                    lReq
-                );
-            }
-        }
         
         TAsyncLogQueue.getInstance( ).AddRecord( "Poloneix parser-thread running..." );
         fParserThread = new Thread(new Runnable(){
@@ -82,8 +72,6 @@ public class TPoloneixMDCollector extends TAbstractMkDataCollector implements TW
                             fWaitObject.wait( );
                         }
                     } catch ( InterruptedException e ) {}
-                    
-                    fHadNewData = true;
                     
                     String lMessage;
                     
@@ -255,7 +243,7 @@ public class TPoloneixMDCollector extends TAbstractMkDataCollector implements TW
                         fHadNewData = false;
                     }
                     
-                    try { Thread.sleep( 1000 );} catch ( InterruptedException ex ) {;}
+                    try { Thread.sleep( fHeartBeatDelay );} catch ( InterruptedException ex ) {;}
                 }
             }
         });
@@ -292,7 +280,12 @@ public class TPoloneixMDCollector extends TAbstractMkDataCollector implements TW
     
     @Override
     public void onMessage( String aMessage ) {
-        AddMessageToParse( aMessage );
+        if( aMessage.contains( "Closing!" ) ){
+            ConnectToServer();
+        }else{
+            AddMessageToParse( aMessage );
+            fHadNewData = true;
+        }
     }
     
     private void ConnectToServer() {
@@ -309,6 +302,16 @@ public class TPoloneixMDCollector extends TAbstractMkDataCollector implements TW
 
         TAsyncLogQueue.getInstance( ).AddRecord( "Poloneix connecting..." );
         fWS_MD = new TNormalWebSocket( fServer, this );
+        
+        if( fWS_MD != null && fInstruments != null ){
+            for( String[] lRes:fInstruments ){
+                String lReq = "{\"command\": \"subscribe\", \"channel\": \""+lRes[1]+"\" }";
+                TAsyncLogQueue.getInstance( ).AddRecord( "Sent to poloneix: " + lReq );
+                fWS_MD.sendMessage( 
+                    lReq
+                );
+            }
+        }
     }
     
     private void AddMessageToParse( final String aMessage ){
