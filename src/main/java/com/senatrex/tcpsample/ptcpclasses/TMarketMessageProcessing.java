@@ -10,13 +10,30 @@ public class TMarketMessageProcessing extends TAbstractMessageProcessing {
 	 * @param aSocket
 	 */
 	public TMarketMessageProcessing(Socket aSocket ) {
-		super(aSocket);
-		// TODO Auto-generated constructor stub
-	
+            super(aSocket);
+            // TODO Auto-generated constructor stub
 	}
 	
+        Thread fPingThread;
+        long fPingFrequency = 1000;
+        
         @Override
 	public void run( ) {
-		TLocalMdataTable.getInstance().addListener( this.fSocket );
+            fPingThread = new Thread( new Runnable() {
+                @Override
+                public void run() {
+                    while( fIsClientAvailable ){
+                        try {
+                            Thread.sleep( fPingFrequency );
+                        } catch (InterruptedException ex) {
+                        }
+                        sendMessage( "<PING>" );
+                    }
+                }
+            }); 
+            
+            fPingThread.start();
+            TLocalMdataTable.getInstance().addListener( this.fSocket );
+            
 	}
 }

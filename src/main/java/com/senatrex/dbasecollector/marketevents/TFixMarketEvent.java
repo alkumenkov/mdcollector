@@ -31,14 +31,18 @@ public class TFixMarketEvent extends TAbstractMarketEvent{
 	 */
 	public void updateInstrument( TAbstractInstrument aAbstractInstrument ) {
             //int lMarketDepth = aAbstractInstrument.getMarketDepth();
-            try {	
+            try {
                 
-		for( int i = 0; i < fAskArray.size(); i++ ) {
+                int lMinSize = Integer.min( aAbstractInstrument.getAsk( ).size(), fAskArray.size() );
+                
+		for( int i = 0; i < lMinSize; i++ ) {
                     aAbstractInstrument.getAsk( ).get( i ).setPrice( fAskArray.get( i ).getPrice( ) );
                     aAbstractInstrument.getAsk( ).get( i ).setVolume( fAskArray.get( i ).getVolume( ) );
 		}
-		
-		for( int i = 0; i < fBidArray.size(); i++ ) {
+		               
+                lMinSize = Integer.min( aAbstractInstrument.getBid( ).size(), fBidArray.size() );
+
+		for( int i = 0; i < lMinSize; i++ ) {
                     aAbstractInstrument.getBid( ).get( i ).setPrice( fBidArray.get( i ).getPrice( ) );
                     aAbstractInstrument.getBid( ).get( i ).setVolume( fBidArray.get( i ).getVolume( ) );
 		}

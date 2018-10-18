@@ -19,6 +19,14 @@ public abstract class TAbstractMkDataCollector implements Runnable{
         protected boolean fIsClosed;
 	protected int fMarketDepth;
         
+        protected void Log( String aMessage ){
+            TAsyncLogQueue.getInstance().AddRecord( this.getClass().getName() + aMessage );
+        }
+        
+        protected void Log( String aMessage, int logLevel ){
+            TAsyncLogQueue.getInstance().AddRecord( ( this.getClass().getName() + aMessage ), logLevel );
+        }
+        
         public void closeCollector(){
             fIsClosed = true; 
             try {

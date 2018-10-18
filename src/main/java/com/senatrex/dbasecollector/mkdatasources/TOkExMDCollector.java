@@ -16,7 +16,7 @@ import com.senatrex.dbasecollector.marketevents.TTradeMarketEvent;
 import com.senatrex.dbasecollector.marketinstruments.TMarketOperation;
 import com.senatrex.dbasecollector.marketinstruments.TStock;
 import com.senatrex.dbasecollector.pmainpac.TLocalMdataTable;
-import com.senatrex.dbasecollector.queues.TAsyncLogQueue;
+//import com.senatrex.dbasecollector.queues.TAsyncLogQueue;
 import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -78,15 +78,10 @@ public class TOkExMDCollector extends TAbstractMkDataCollector implements TWebSo
 
      //   client.getMyTrades(symbol)
         HashMap<String, NavigableMap<BigDecimal, BigDecimal>> lDepthCache = new HashMap<>();
-
-        fUpdateIdMap.put( aSymbol, fLastUpdateId );
-
-        NavigableMap<BigDecimal, BigDecimal> asks = new TreeMap<>();
-        
+     //   fUpdateIdMap.put( aSymbol, fLastUpdateId );
+        NavigableMap<BigDecimal, BigDecimal> asks = new TreeMap<>();        
         lDepthCache.put(ASKS, asks);
-
-        NavigableMap<BigDecimal, BigDecimal> bids = new TreeMap<>(Comparator.reverseOrder());
-        
+        NavigableMap<BigDecimal, BigDecimal> bids = new TreeMap<>(Comparator.reverseOrder());  
         lDepthCache.put(BIDS, bids);
 
         this.fDepthCache.put( aSymbol, lDepthCache );
@@ -112,17 +107,16 @@ public class TOkExMDCollector extends TAbstractMkDataCollector implements TWebSo
             //    System.out.println("[{'event':'addChannel','channel':'ok_sub_spot_"+lIsin+"_depth'},{'event':'addChannel','channel':'ok_sub_spot_"+lIsin+"_deals'}]");
                 
               //  fWsDepthPoint.sendMessage( "[{'event':'addChannel','channel':'ok_sub_spot_"+lIsin+"_deals'}]");
-                 
-                
-                
+    
             }              
         }
-  //      fWsDepthPoint.sendMessage( lMessageToSend);
-  //      lMessageToSend = lMessageToSend.substring(0, lMessageToSend.length()-1);
-  //      lMessageToSend+="]";
-  //     fWsDepthPoint.sendMessage( lMessageToSend); 
-     //   fWsDepthPoint.sendMessage( "{'event':'addChannel','channel':'ok_sub_spot_"+lIsin+"_depth'}" ); 
-     //   fWsDepthPoint.sendMessage( "{'event':'addChannel','channel':'ok_sub_spot_"+lIsin+"_deals'}");
+        
+    //      fWsDepthPoint.sendMessage( lMessageToSend);
+    //      lMessageToSend = lMessageToSend.substring(0, lMessageToSend.length()-1);
+    //      lMessageToSend+="]";
+    //     fWsDepthPoint.sendMessage( lMessageToSend); 
+    //   fWsDepthPoint.sendMessage( "{'event':'addChannel','channel':'ok_sub_spot_"+lIsin+"_depth'}" ); 
+    //   fWsDepthPoint.sendMessage( "{'event':'addChannel','channel':'ok_sub_spot_"+lIsin+"_deals'}");
         fPingThread = new Thread(new Runnable(){
             @Override
             public void run() {
@@ -136,7 +130,7 @@ public class TOkExMDCollector extends TAbstractMkDataCollector implements TWebSo
                     }
                     
                     fWsDepthPoint.sendMessage("{'event':'ping'}");
-                    TAsyncLogQueue.getInstance().AddRecord("okex ping!");
+                    Log("okex ping!");
                 }
             }
             
@@ -144,6 +138,12 @@ public class TOkExMDCollector extends TAbstractMkDataCollector implements TWebSo
         
         fPingThread.start();
         
+    }
+    
+    private void Reconnect(){
+        Log( "reconnecting" );
+        fDepthCache = new HashMap<>();
+        run();
     }
     
     private void ConnectToServer(){
@@ -155,13 +155,26 @@ public class TOkExMDCollector extends TAbstractMkDataCollector implements TWebSo
         try {
             Thread.sleep( 1000 );
         } catch ( InterruptedException ex ) {
-            TAsyncLogQueue.getInstance().AddRecord( ex.getLocalizedMessage() );
+            Log( ex.getLocalizedMessage() );
         }
 
         fWsDepthPoint = new TNormalWebSocket( fDepthRespone, this );
-
+        while( !fWsDepthPoint.isConnected( ) ){
+            try {
+                Thread.sleep( fConnectionTryingDelay );
+            } catch (InterruptedException ex) {
+                
+            }
+            if( fConnectionTryingDelay < 60000L ){
+                fConnectionTryingDelay *= 2;
+            }  
+            fWsDepthPoint = new TNormalWebSocket( fDepthRespone, this );
+        }
+        fConnectionTryingDelay = 1000L;
+        
     }
-
+    
+    long fConnectionTryingDelay=1000L;
     /**
     * Updates an order book (bids or asks) with a delta received from the server.
     * Whenever the qty specified is ZERO, it means the price should was removed from the order book.
@@ -176,7 +189,7 @@ public class TOkExMDCollector extends TAbstractMkDataCollector implements TWebSo
             if (qty.compareTo(BigDecimal.ZERO) == 0) {
               // qty=0 means remove this level
                 if( aLastOrderBookEntries.get( price ) == null ){
-                    TAsyncLogQueue.getInstance().AddRecord( "cant remove price!no such element!price is " + price );
+                    Log( "cant remove price!no such element!price is " + price );
                 }  
                 aLastOrderBookEntries.remove( price );
             } else {
@@ -281,18 +294,18 @@ public class TOkExMDCollector extends TAbstractMkDataCollector implements TWebSo
 
     @Override
     public void onMessage(String aMessage) {
-   //     System.out.println(aMessage);
-        TAsyncLogQueue.getInstance().AddRecord( aMessage, 2 );
+      //  System.out.println(aMessage);
+        Log( aMessage, 2 );
         
         if( aMessage.contains( "Closing!" ) ){
             fIsOpened = false;
-            ConnectToServer();
+            Reconnect();
         }else if( aMessage.contains( "Error!" ) ){
-            fWsDepthPoint.disconnect();
+            Reconnect();
         }else if( aMessage.contains( "Opened!" ) ){
             fIsOpened = true;
         }else{
-            
+
             try{
                 JSONArray lResponseArray = new JSONArray( aMessage );
                 for( int i=0; i<lResponseArray.length(); i++ ){
@@ -313,7 +326,7 @@ public class TOkExMDCollector extends TAbstractMkDataCollector implements TWebSo
                     } 
                 }
             }catch(Exception e){
-                TAsyncLogQueue.getInstance().AddRecord( "bad Response!"+aMessage );
+                Log( "bad Response!"+aMessage );
             }
         }
     }
@@ -335,7 +348,7 @@ public class TOkExMDCollector extends TAbstractMkDataCollector implements TWebSo
             sendSnapShot( lRespSymbol, fDepthCache.get(lRespSymbol).get(ASKS), fDepthCache.get(lRespSymbol).get(BIDS) );
 
         } else {
-            TAsyncLogQueue.getInstance().AddRecord( "unknown symbol!" );
+            Log( "unknown symbol!" );
         }
          
     }
@@ -369,7 +382,7 @@ public class TOkExMDCollector extends TAbstractMkDataCollector implements TWebSo
                     fMarketEventQueue.AddRecord( new TTradeMarketEvent(aSymbol, lPrice, lVolume, lSide, "okex") );
                 
                 } catch (Exception e ) {
-                    TAsyncLogQueue.getInstance().AddRecord( "Bad trade: " +  aResponse + "\t" + e.getLocalizedMessage());
+                    Log( "Bad trade: " +  aResponse + "\t" + e.getLocalizedMessage());
                 }
             }
             int t=0;

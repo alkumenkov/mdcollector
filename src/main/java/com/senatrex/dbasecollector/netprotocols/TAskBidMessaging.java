@@ -26,7 +26,8 @@ public class TAskBidMessaging extends TAbstractTcpMessaging{
      * @param aAbstractInstrument its values will be compiled to answer
      */
     public void compileMessage( TAbstractInstrument  aAbstractInstrument ){
-        String lAnswer = "<" + aAbstractInstrument.getLocalName( ) + ";" + String.format("%4.8f", aAbstractInstrument.getAsk( ).get(0).getPrice( ) ) + ";" +
+        String lAnswer = "<" + aAbstractInstrument.getLocalName( ) + 
+                ";" + String.format("%4.8f", aAbstractInstrument.getAsk( ).get(0).getPrice( ) ) + ";" +
                                         String.format( "%4.8f", aAbstractInstrument.getBid( ).get(0).getPrice( ) ) + ">";
         TAsyncLogQueue.getInstance( ).AddRecord( "answered "+lAnswer, 2 );
         super.sendMessage( lAnswer );

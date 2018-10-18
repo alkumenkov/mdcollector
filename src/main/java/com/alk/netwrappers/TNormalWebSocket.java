@@ -40,6 +40,7 @@ public class TNormalWebSocket {
                fClient.onMessage( message );
             }
             
+            @Override
             public void onDisconnected(WebSocket websocket, WebSocketFrame serverCloseFrame, WebSocketFrame clientCloseFrame, boolean closedByServer) throws Exception {
                 Thread.sleep(10000);
                 TAsyncLogQueue.getInstance().AddRecord( fAddress+" disconnected!" );
@@ -49,34 +50,34 @@ public class TNormalWebSocket {
         } catch (IOException ex) {
             Logger.getLogger(TNormalWebSocket.class.getName()).log(Level.SEVERE, null, ex);
         }
-        
-        
-        
+
        try
         {
             // Connect to the server and perform an opening handshake.
             // This method blocks until the opening handshake is finished.
             if( ws != null ){
                 ws.connect();
+                fIsConencted = true;
             }
         }
         catch (OpeningHandshakeException e)
         {
-            int t=0;
+            fIsConencted = false;
             // A violation against the WebSocket protocol was detected
             // during the opening handshake.
         }
         catch (HostnameUnverifiedException e)
         {
-            int t=0;
+            fIsConencted = false;
             // The certificate of the peer does not match the expected hostname.
         }
         catch (WebSocketException e)
         {
-            int t=0;
+            fIsConencted = false;
+            
             // Failed to establish a WebSocket connection.
         }catch(Exception e){
-            int t=0;
+            fIsConencted = false;
         }
        
        
@@ -84,6 +85,12 @@ public class TNormalWebSocket {
     
     public void sendMessage( String aMessage ){
         ws.sendText(aMessage);
+    }
+    
+    private boolean fIsConencted = false;
+    
+    public boolean isConnected(){
+        return fIsConencted;
     }
     
     public void disconnect(){

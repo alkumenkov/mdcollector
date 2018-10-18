@@ -27,8 +27,7 @@ public class TTickMessaging extends TAbstractTcpMessaging{
 	 */
 	public void compileMessage( TAbstractInstrument  aAbstractInstrument ){
 		String lAnswer = "<" + aAbstractInstrument.getLocalName( ) + ";" + aAbstractInstrument.getTick( ).getSide( ) + ";" +
-						String.format("%4.8f",aAbstractInstrument.getTick( ).getPrice( )) + ";" + aAbstractInstrument.getTick( ).getVolume( ) + ">";
-		
+						String.format("%4.8f",aAbstractInstrument.getTick( ).getPrice( )) + ";" + aAbstractInstrument.getTick( ).getVolume( ) + ">";		
 		super.sendMessage( lAnswer );
 	}
 }

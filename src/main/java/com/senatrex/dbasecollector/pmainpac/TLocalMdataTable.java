@@ -115,7 +115,7 @@ public class TLocalMdataTable {
             
                 TAsyncLogQueue.getInstance( ).AddRecord( aMessage, 0 );
             
-		if( aMessage.indexOf( ";TRADES" ) > -1 ) {
+		if( aMessage.contains(";TRADES") ) {
 			String lName = aMessage.substring( 1, aMessage.indexOf( ";" ) );
 			int lIndex = getIndexByLocalName( lName );
 			if(lIndex>-1 )
@@ -123,7 +123,7 @@ public class TLocalMdataTable {
 			return;
 		}
 	
-		if( aMessage.indexOf( ";OI" ) > -1 ) {
+		if( aMessage.contains(";OI") ) {
 			String lName = aMessage.substring( 1, aMessage.indexOf( ";" ) );
 			int lIndex = getIndexByLocalName( lName );
 			if(lIndex>-1 )
@@ -131,7 +131,7 @@ public class TLocalMdataTable {
 			return;
 		}  
 		
-		if( aMessage.indexOf( ";ASK_BID" ) > -1 ) {
+		if( aMessage.contains(";ASK_BID") ) {
 			String lName = aMessage.substring( 1, aMessage.indexOf( ";" ) );
 			int lIndex = getIndexByLocalName( lName );
 			if( lIndex>-1 )

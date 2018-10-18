@@ -8,7 +8,7 @@ package com.senatrex.dbasecollector.mkdatasources;
 //import com.alk.netwrappers.ClientWebSocketEndpoint;
 import com.alk.netwrappers.TNormalWebSocket;
 import com.alk.netwrappers.TWebSocketable;
-import com.senatrex.dbasecollector.queues.TAsyncLogQueue;
+//import com.senatrex.dbasecollector.queues.TAsyncLogQueue;
 import com.binance.api.client.BinanceApiClientFactory;
 import com.binance.api.client.BinanceApiRestClient;
 
@@ -31,6 +31,8 @@ import java.util.Comparator;
 import java.util.Iterator;
 import java.util.Map.Entry;
 import java.util.Set;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 //import java.util.logging.Level;
 //import java.util.logging.Logger;
 import org.json.JSONArray;
@@ -137,13 +139,27 @@ public class TBinanceMDCollector extends TAbstractMkDataCollector implements TWe
         try {
             Thread.sleep( 1000 );
         } catch ( InterruptedException ex ) {
-            TAsyncLogQueue.getInstance().AddRecord( ex.getLocalizedMessage() );
+            Log( ex.getLocalizedMessage() );
         }
 
         fWsDepthPoint = new TNormalWebSocket( fDepthRespone, this );
-
+        while( !fWsDepthPoint.isConnected( ) ){
+            Log("tryingToConnect");
+            try {
+                Thread.sleep(fConnectionTryingDelay);
+            } catch (InterruptedException ex) {
+                
+            }
+            if( fConnectionTryingDelay < 60000L ){
+                fConnectionTryingDelay *= 2;
+            }
+            fWsDepthPoint = new TNormalWebSocket( fDepthRespone, this );
+            
+        }
+        fConnectionTryingDelay = 1000L;
     }
 
+    long fConnectionTryingDelay=1000L;
     /**
     * Updates an order book (bids or asks) with a delta received from the server.
     *
@@ -159,7 +175,7 @@ public class TBinanceMDCollector extends TAbstractMkDataCollector implements TWe
             if (qty.compareTo(BigDecimal.ZERO) == 0) {
               // qty=0 means remove this level
                 if( lastOrderBookEntries.get( price ) == null ){
-                    TAsyncLogQueue.getInstance().AddRecord( "cant remove price!no such element!price is " + price );
+                    Log( "cant remove price!no such element!price is " + price, 3 );
                 }  
                 lastOrderBookEntries.remove( price );
             } else {
@@ -263,15 +279,23 @@ public class TBinanceMDCollector extends TAbstractMkDataCollector implements TWe
         return true;//TODO make connector diagnostic!!!
     }
 
+     private void Reconnect(){
+        Log( "reconnecting" );
+        depthCache = new HashMap<>();
+        run();
+    }
+    
     @Override
     public void onMessage(String aMessage) {
       
-        TAsyncLogQueue.getInstance().AddRecord( aMessage, 2 );
+        Log( aMessage, 2 );
         
         if( aMessage.contains( "Closing!" ) ){
-            ConnectToServer();
+            Reconnect();
+            
         }else if( aMessage.contains( "Error!" ) ){
-            fWsDepthPoint.disconnect();
+            Reconnect();
+
         }else if( aMessage.contains( "Opened!" ) ){
             
         }else {
@@ -290,12 +314,7 @@ public class TBinanceMDCollector extends TAbstractMkDataCollector implements TWe
     private void ParseDepthUpdate( JSONObject aResponse ){
         String lRespSymbol = aResponse.getString("s");
         Long lLastUpdateId = fUpdateIdMap.get( lRespSymbol );
-      /*  if( ( lLastUpdateId == null || lLastUpdateId != ( aResponse.getLong("U")-1 ) ) ){
-            TAsyncLogQueue.getInstance().AddRecord( "missed id!refreshing" );
-            initializeDepthCache( lRespSymbol );
-        }*/
 
-        
         if ( aResponse.getLong("u") > fUpdateIdMap.get(lRespSymbol) ) {
             
             if( fMinAmoundMap.get( lRespSymbol ) != null ){
@@ -308,7 +327,7 @@ public class TBinanceMDCollector extends TAbstractMkDataCollector implements TWe
                 sendSnapShot( lRespSymbol,  depthCache.get(lRespSymbol).get(ASKS), depthCache.get(lRespSymbol).get(BIDS) );
                 
             } else {
-                TAsyncLogQueue.getInstance().AddRecord( "unknown symbol!" );
+                Log( "unknown symbol!" );
             }
             
         }

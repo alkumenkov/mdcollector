@@ -20,6 +20,7 @@ public abstract class TAbstractMessageProcessing implements Runnable {
 
     private static final int BUFFER_LENGTH = 1000;
     Socket fSocket;
+    boolean fIsClientAvailable=false;
 
     /**
      * <p>
@@ -31,6 +32,7 @@ public abstract class TAbstractMessageProcessing implements Runnable {
      */
     public TAbstractMessageProcessing(Socket aSocket) {
         fSocket = aSocket;
+        fIsClientAvailable = true;
     }
 
     /**
@@ -71,12 +73,13 @@ public abstract class TAbstractMessageProcessing implements Runnable {
      * @param Message for server in bytes
      * </p>
      */
-    private void sendMessage(byte[] aMessageToSend) {
+    protected void sendMessage( String aMessageToSend ) {
         try {
             PrintWriter lWriter = new PrintWriter(fSocket.getOutputStream(), true);
-            lWriter.println(new String(aMessageToSend));
+            lWriter.println( aMessageToSend );
         } catch (Exception e) {
             // TODO Auto-generated catch block
+            fIsClientAvailable=false;
             e.printStackTrace();
         }
     }

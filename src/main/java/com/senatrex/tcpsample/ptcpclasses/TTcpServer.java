@@ -38,6 +38,7 @@ public class TTcpServer{
 		}
 	}
 	
+        
 	/**
 	 * <p>
 	 * waiting for client connections, if some client connected, starts dialog with him <br>
@@ -47,23 +48,23 @@ public class TTcpServer{
 	public void runServer( ){
 		try {			
 			
-                        TAsyncLogQueue.getInstance().AddRecord( "Server started", 0 );
-			while( !fServSocket.isClosed() ){	//-for multiple connections		
+                    TAsyncLogQueue.getInstance().AddRecord( "Server started", 0 );
+                    while( !fServSocket.isClosed() ){	//-for multiple connections		
 
                         TAsyncLogQueue.getInstance().AddRecord( "server cycle", 1 );
-			//	synchronized( fServSocket ) {
+                        //	synchronized( fServSocket ) {
                         Socket lSocket = fServSocket.accept( );
                         TAsyncLogQueue.getInstance().AddRecord( "Client connected", 0 );
                         lSocket.setKeepAlive( false );
                         TAbstractMessageProcessing lMessageProcessing = new TMarketMessageProcessing( lSocket);
                         Thread lThread = new Thread( lMessageProcessing );
                         lThread.start( );
-					
-			//	}
-			}
+
+                    //	}
+                    }
 		} catch (IOException e) {
-			// TODO Auto-generated catch block
-			e.printStackTrace();
+                    // TODO Auto-generated catch block
+                    e.printStackTrace();
 		}
 	}
 }

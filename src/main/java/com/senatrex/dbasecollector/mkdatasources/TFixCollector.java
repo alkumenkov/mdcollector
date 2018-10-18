@@ -16,7 +16,13 @@ import com.senatrex.dbasecollector.marketinstruments.TStock;
 import com.senatrex.dbasecollector.pmainpac.TLocalMdataTable;
 import com.senatrex.dbasecollector.ptimeutilities.TTimeUtilities;
 import com.senatrex.dbasecollector.queues.TAsyncLogQueue;
+//import com.senatrex.dbasecollector.queues.TAsyncLogQueue;
 import com.senatrex.dbasecollector.queues.TMarketEventQueue;
+import java.net.InetSocketAddress;
+import java.nio.ByteBuffer;
+import java.nio.channels.SocketChannel;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 
 /**
@@ -31,138 +37,194 @@ public class TFixCollector extends TAbstractMkDataCollector{
 	private Map< String, String > fParametersMap;
 	private boolean fIsClosed;
 	private int fMessageNumber;
-	private Socket fSocket;
-	PrintWriter fWriter;
+	private SocketChannel fSocket;
 
-	
 	public TFixCollector( Map< String, String > aParametersMap ) {
-                super( );
-		fParametersMap = aParametersMap;
-		fIsClosed = false;
-		fMessageNumber = 1;
-                try{
-                    fMarketDepth = Integer.parseInt( fParametersMap.get( "MarketDepth" ) );
-                }catch(Exception e){
-                    fMarketDepth = 1;
-                }
+            super( );
+            fParametersMap = aParametersMap;
+            fIsClosed = false;
+            fMessageNumber = 1;
+            if( aParametersMap != null ){
+                fMarketDepth = Integer.parseInt( fParametersMap.get("MarketDepth") );
+            }
+            Log( "constructor finished!" );
 	}
-	
+        
+        boolean ConnectToServer(){
+            boolean oResuilt = false;
+           
+            try{
+                fSocket  = SocketChannel.open(); 
+                fSocket.connect( new InetSocketAddress( fParametersMap.get( "host" ), Integer.parseInt( fParametersMap.get( "port" ) ) ) );
+                fSocket.configureBlocking( false );
+                oResuilt = true;
+            } catch ( Exception e ) {
+                oResuilt = false;
+                Log( e.getLocalizedMessage( ) );
+                // TODO Auto-generated catch block
+                if( fSocket != null ) {
+                    try {
+                        fSocket.close();
+                    } catch ( IOException e1 ) {
+                        // TODO Auto-generated catch block
+                        e1.printStackTrace();
+                    }
+                }
+                Log( e.getMessage( ) );
+            } 
+            return oResuilt;
+        }
+        
+        private boolean runConnector(){
+            String lLoginMessage = "";
+            boolean oIsNormalStopped = true;
+            //String lResuillt = generateMkDataInstrumentRequest(fInstruments[40], 0, fParametersMap );
+            lLoginMessage = generateLoginMessage( fParametersMap );
+            for( int i=0; i < fInstruments.length; i++ ) {
+                lLoginMessage += generateMkDataInstrumentRequest(fInstruments[i], 0, fParametersMap );
+            }
+
+          //  System.out.println(lLoginMessage);
+            Log( lLoginMessage, 3 );
+
+            if( fSocket != null ){
+                Thread lHeartBeat = new Thread (
+                new Runnable(  ) {
+                    public void run( ) {
+                        while( fIsClosed == false ) {
+                            try {
+                                Thread.sleep( 29000 );
+                            } catch ( InterruptedException e ) {
+                                // TODO Auto-generated catch block
+                                e.printStackTrace( );
+                            }
+                            String lHeartbeatStr = generateHeartBeatMessage( fParametersMap );
+                            writeToSocket( lHeartbeatStr );
+                        }
+                    }
+                } );
+                
+                writeToSocket( lLoginMessage );
+
+                lHeartBeat.start( );
+
+                char[] lBuffer = new char[ Integer.parseInt( fParametersMap.get( "RCVBUF" ) ) ];
+                ByteBuffer buf = ByteBuffer.allocate( Integer.parseInt(fParametersMap.get( "RCVBUF" ) ) );
+                String lLocalBuffer = "";
+                String lIncomeString = "";
+
+                while ( fIsClosed == false ){
+
+                    int res = -1;
+                        try{
+                        res = fSocket.read( buf );
+                    }catch( Exception e ){   
+                    }
+
+                    if( res <= 0 ){
+
+                        try {
+                            Thread.sleep( 1000 );
+                        } catch (InterruptedException ex) {
+                        }
+
+                    } else {
+                        //lBuffer = buf.array();
+                        lIncomeString = (new String( buf.array() )).substring( 0, res );
+                        buf.clear();
+                        int lNewMessageIndex = lIncomeString.lastIndexOf( "8=FIX" );
+                        if( lNewMessageIndex == 0 && lIncomeString.contains( "10=" ) ) {
+                            lNewMessageIndex = lIncomeString.length();
+                        }
+
+                        if ( lNewMessageIndex > -1 ) {
+                            lLocalBuffer += lIncomeString.substring( 0, lNewMessageIndex );
+                            if ( lLocalBuffer.length( ) > 0 ) {
+                                if ( lLocalBuffer.contains( "35=1" ) ) {
+                                    String lHbA = generateHeartBeatAnswear( fParametersMap, getTagValue( lLocalBuffer, "112" ) );
+                                    System.out.println( "My heart beat answer is " + lHbA );
+                                    writeToSocket( lHbA );
+                                }
+
+                                try {  
+                                    parseResponse( lLocalBuffer );
+                                } catch (Exception e) {
+                                    Log( e.getClass()+":"+e.getLocalizedMessage()+" "+lLocalBuffer );
+                                }
+                            }
+                            lLocalBuffer = lIncomeString.substring(
+                                    lIncomeString.lastIndexOf("10="),
+                                    lIncomeString.length( ) );
+                        } else {
+                            lLocalBuffer += lIncomeString;
+                        }
+                        Arrays.fill(lBuffer, '0');
+                    }
+                }
+
+            } else {
+                Log( "socket not initialized", 0 );
+            }
+
+            try{
+                fSocket.close();
+            } catch(Exception e){
+                Log( e.getMessage(), 0 );
+            }
+            return oIsNormalStopped;
+        }
+        
 	//13.08.2015 11:10:46.236	fixd	Send	8=FIX.4.29=7635=A98=0108=30141=Y34=149=SYNTRX52=20150813-08:10:46.04656=BCSMDPUMP10=2108=FIX.4.29=16035=V146=155=ATAD22=448=US6708312052207=XLON263=1264=10265=0267=2269=0269=1262=fixd#113796848#034=249=SYNTRX52=20150813-08:10:46.21656=BCSMDPUMP10=0478=FIX.4.29=15935=V146=155=GAZ22=448=US36829G1076207=XLON263=1264=10265=0267=2269=0269=1262=fixd#113796848#134=349=SYNTRX52=20150813-08:10:46.21656=BCSMDPUMP10=0328=FIX.4.29=16035=V146=155=HYDR22=448=US4662941057207=XLON263=1264=10265=0267=2269=0269=1
 	public void run( ) {
 
-            String lLoginMessage = "";
-                    
-            if( fParametersMap != null && fInstruments != null ){
-                    //String lResuillt = generateMkDataInstrumentRequest(fInstruments[40], 0, fParametersMap );
-                lLoginMessage = generateLoginMessage( fParametersMap );
-                for( int i=0; i < fInstruments.length; i++ ) {
-                    lLoginMessage += generateMkDataInstrumentRequest(fInstruments[i], 0, fParametersMap );
+            while( !fIsClosed ){
+                boolean lServerConnected = ConnectToServer();
+                boolean IsNormalClosed = false;
+                if( lServerConnected ){
+                    fSleepTime = 1000L;
+                    IsNormalClosed = runConnector();
                 }
-
-              //  System.out.println(lLoginMessage);
-                TAsyncLogQueue.getInstance( ).AddRecord( lLoginMessage, 3 );
-                try{
-                    fSocket = new Socket( fParametersMap.get( "host" ), Integer.parseInt( fParametersMap.get( "port" ) ) );
-                    fSocket.setTcpNoDelay( true );
-                    fWriter = new PrintWriter( fSocket.getOutputStream( ), true );
-
-                } catch(Exception e){
-                    TAsyncLogQueue.getInstance( ).AddRecord( "error initializing socket! "+e.getLocalizedMessage(), 0 );
-                }
-
-                if( fSocket != null && fWriter != null ){
-                    Thread lHeartBeat = new Thread (
-                    new Runnable(  ) {
-                        public void run( ) {
-                            while( fIsClosed == false ) {
-                                try {
-                                        Thread.sleep( 29000 );
-                                    } catch ( InterruptedException e ) {
-                                        // TODO Auto-generated catch block
-                                        e.printStackTrace( );
-                                    }
-                                String lHeartbeatStr = generateHeartBeatMessage( fParametersMap );
-                                fWriter.print( new String( lHeartbeatStr ) );
-                                fWriter.flush();
-                            }
-                        }
-                    } );
-
-                    fWriter.print( new String( lLoginMessage ) );
-                    fWriter.flush();
-                    lHeartBeat.start( );
-                    
-                    InputStream lStream = null;
-                    BufferedReader ins = null;
-                    try{
-                        lStream = fSocket.getInputStream( );	
-                        ins = new BufferedReader( new InputStreamReader( lStream ) );
-                    } catch ( Exception e ){
-                        TAsyncLogQueue.getInstance().AddRecord( "error creating input stream "+e.getLocalizedMessage(), 0 );
+               
+                if( !IsNormalClosed ){
+                    if( fSleepTime < 60000L ){
+                        fSleepTime *= 2;
                     }
-                    
-                    if( lStream != null && ins != null ){
-                        char[ ] lBuffer = new char[ Integer.valueOf( fParametersMap.get( "RCVBUF" ) ) ];
-
-                        String lLocalBuffer = "";
-                        String lIncomeString = "";
-                        while( fIsClosed == false ) {
-                            int res = -1;
-                            try{
-                                res = ins.read( lBuffer );
-                            } catch( Exception e ){
-                                TAsyncLogQueue.getInstance( ).AddRecord( "error reading socket! "+e.getLocalizedMessage(), 0 );
-                            }
-
-                            if( res == -1 ){
-                                fIsClosed = true;
-                            } else {
-                                lIncomeString = (new String( lBuffer ) ).substring( 0, res ) ;
-                                int lNewMessageIndex = lIncomeString.lastIndexOf( "8=FIX" );
-                                if( lNewMessageIndex > -1 ) {
-                                    lLocalBuffer += lIncomeString.substring( 0, lNewMessageIndex );
-                                    if( lLocalBuffer.length( ) > 0 ) {
-                                        TAsyncLogQueue.getInstance().AddRecord( lLocalBuffer, 3 );
-                                        if( lLocalBuffer.contains("35=1") ) {
-                                            String lHbA = generateHeartBeatAnswear( fParametersMap, getTagValue(lLocalBuffer, "112") );
-                                            System.out.println("heart beat answer is "+lHbA );
-                                            fWriter.print( lHbA );
-                                            fWriter.flush();
-                                        }
-                                        
-                                        parseResponse( lLocalBuffer );
-                                        
-                                    }
-                                    lLocalBuffer = lIncomeString.substring( lIncomeString.lastIndexOf( "8=FIX" ), lIncomeString.length( ) );
-                                } else {
-                                    lLocalBuffer += lIncomeString;
-                                }
-                                Arrays.fill(lBuffer, '0');
-                            }
-                        }
+                    try {
+                        Thread.sleep(1000);
+                    } catch (InterruptedException ex) {
                     }
-                } else {
-                    TAsyncLogQueue.getInstance().AddRecord( "socket not initialized", 0 );
                 }
-                    
-                try{
-                    fSocket.close();
-                } catch(Exception e){
-                    TAsyncLogQueue.getInstance().AddRecord( e.getMessage(), 0 );
-                }
-		
-            } else {
-                TAsyncLogQueue.getInstance().AddRecord( this.toString() + "initializing values null!", 0 );
+                
             }
-		 
 	}
+        
+        long fSleepTime = 1000L;
+        
+        private void writeToSocket( String aMessage ) {
+            ByteBuffer buf = ByteBuffer.allocate( aMessage.getBytes().length );
+            buf.clear();
+            buf.put( aMessage.getBytes( ) );
+            buf.flip();
+
+            while( buf.hasRemaining( ) ) {
+                try {
+                    fSocket.write( buf );
+                    Log( "sending " + aMessage );
+                } catch (IOException ex) {
+                    Log(  ex.getLocalizedMessage( ) );
+                    break;
+                }
+            }
+
+            TAsyncLogQueue.getInstance( ).AddRecord( "sended " + aMessage );
+        }
 	
 	public void parseResponse( String aResponse ){
              //   TAsyncLogQueue.getInstance( ).AddRecord( aResponse );
             String[] lMessages = aResponse.split("8=FIX.4.2");
             for( int i = 1; i < lMessages.length; i++ ) {
-
-                    if( lMessages[ i ].indexOf("35=W")> -1 ) {
+                
+                    if( lMessages[ i ].contains( "35=W" ) ) {
 
                     String lExchangeName = getTagValue( lMessages[ i ], "48" );
                     ArrayList<TMarketOperation> lAsks = new ArrayList<TMarketOperation>();
@@ -173,7 +235,7 @@ public class TFixCollector extends TAbstractMkDataCollector{
                     if( lTagValStr.length() > 0 ) {
 
                         int lOperationCount = Integer.parseInt( lTagValStr );
-
+                        
                         for( int lOperationIndex = 0; lOperationIndex < lOperationCount; lOperationIndex++ ) {
                             int lBlockIndex = lMessages[ i ].indexOf( "269=" );
 
@@ -193,6 +255,7 @@ public class TFixCollector extends TAbstractMkDataCollector{
                                     if( lTypeOfOperation.equals("1") ) {
                                         lAsks.add( lMarketOperation );	
                                     }
+                                    
                                     if( lTypeOfOperation.equals("0") ) {
                                         lBids.add( lMarketOperation );	
                                     }
@@ -203,7 +266,7 @@ public class TFixCollector extends TAbstractMkDataCollector{
                         fMarketEventQueue.AddRecord( new TFixMarketEvent( lExchangeName, lAsks, lBids ) );
                     //System.out.println( lMessages[ i ] );
                     } else {
-                        TAsyncLogQueue.getInstance().AddRecord( "no tag 268! "+aResponse, 0 );
+                        Log( "no tag 268! "+aResponse, 0 );
                     }
                 }		
             }
@@ -239,7 +302,7 @@ public class TFixCollector extends TAbstractMkDataCollector{
             try {
                 TMarketEventQueue.getInstance().finalize();
             } catch ( Throwable ex ) {
-                TAsyncLogQueue.getInstance().AddRecord( ex.getMessage() );
+                Log( ex.getMessage() );
             }
         }
         
@@ -257,12 +320,10 @@ public class TFixCollector extends TAbstractMkDataCollector{
                 int lEndIndex = aMessage.indexOf( "", lTagPosition );
                 if( lStartIndex > -1 && lEndIndex > -1 && lStartIndex <= lEndIndex ) {
                     oResuilt = aMessage.substring( lStartIndex, lEndIndex );
-          
                 } else {
                     System.out.println( "no tag!see log" );
-                    TAsyncLogQueue.getInstance().AddRecord( "error tag parsing!: " + aMessage + " " + aTag, 0 );
+                    Log( "error tag parsing!: " + aMessage + " " + aTag, 0 );
                 }
-                
             }
             return oResuilt;
 	}
@@ -282,8 +343,7 @@ public class TFixCollector extends TAbstractMkDataCollector{
 		return "10=" + ( new String( oRes ) ) + "";
 	}
 	
-	private String generateMkDataInstrumentRequest( String[] aInstruments, int aNumber, Map< String, String > aParametersMap ) { //tag 55
-		
+	private String generateMkDataInstrumentRequest( String[] aInstruments, int aNumber, Map< String, String > aParametersMap ) { //tag 55		
 		String lMarketMessageBody = "146=155=" + aInstruments[ 2 ] + "22=" + aParametersMap.get( "IDSource" ) + "48=" + aInstruments[ 1 ] + "207=" + aInstruments[ 3 ] + "263=1264="+aParametersMap.get( "MarketDepth" )+"265=0267=2269=0269=1262=fixd#113796848#" + aNumber + "34=" + fMessageNumber + "49="+aParametersMap.get( "sender" )+"52=" + TTimeUtilities.GetCurrentTime( "yyyyMMdd-HH:mm:ss.SSS" ) + "56=" + aParametersMap.get( "targer" ) + "";
 		int lLength = lMarketMessageBody.length( ) + 5;
 		String oResuilt = "8=FIX.4.29=" + lLength + "35=V"+lMarketMessageBody;
@@ -303,9 +363,7 @@ public class TFixCollector extends TAbstractMkDataCollector{
 		fMessageNumber++;
 		return oResuilt;
 	}
-	
-	
-	
+		
 	/**
 	 * Method adds instruments for download market data
 	 * @param aInstruments array of instruments
@@ -335,7 +393,7 @@ public class TFixCollector extends TAbstractMkDataCollector{
 	@Override
 	public boolean isEnabled( ) {
             if( fSocket != null ){
-		return !fSocket.isClosed();
+		return fSocket.isConnected();
             } else {
                 return false;
             }
