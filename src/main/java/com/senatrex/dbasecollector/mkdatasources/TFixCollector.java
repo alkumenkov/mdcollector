@@ -52,7 +52,7 @@ public class TFixCollector extends TAbstractMkDataCollector{
         
         boolean ConnectToServer(){
             boolean oResuilt = false;
-           
+            fSocket=null;
             try{
                 fSocket  = SocketChannel.open(); 
                 fSocket.connect( new InetSocketAddress( fParametersMap.get( "host" ), Integer.parseInt( fParametersMap.get( "port" ) ) ) );
@@ -184,13 +184,13 @@ public class TFixCollector extends TAbstractMkDataCollector{
                     fSleepTime = 1000L;
                     IsNormalClosed = runConnector();
                 }
-               
+
                 if( !IsNormalClosed ){
                     if( fSleepTime < 60000L ){
                         fSleepTime *= 2;
                     }
                     try {
-                        Thread.sleep(1000);
+                        Thread.sleep(fSleepTime);
                     } catch (InterruptedException ex) {
                     }
                 }
@@ -234,32 +234,31 @@ public class TFixCollector extends TAbstractMkDataCollector{
 
                     if( lTagValStr.length() > 0 ) {
 
-                        int lOperationCount = Integer.parseInt( lTagValStr );
-                        
+                        int lOperationCount = Integer.parseInt( lTagValStr );                        
                         for( int lOperationIndex = 0; lOperationIndex < lOperationCount; lOperationIndex++ ) {
                             int lBlockIndex = lMessages[ i ].indexOf( "269=" );
 
                             if( lBlockIndex > -1 ) {
                                 lMessages[ i ] = lMessages[ i ].substring( lBlockIndex, lMessages[ i ].length( ) );
 
-                                    String lTypeOfOperation = getTagValue( lMessages[ i ], "269" );
-                                    TMarketOperation lMarketOperation = new TMarketOperation();                                            
-                                    try{
-                                        lMarketOperation.setPrice( Double.parseDouble( getTagValue( lMessages[ i ], "270" ) ) );
-                                        lMarketOperation.setVolume( Integer.parseInt( getTagValue( lMessages[ i ], "271" ) ) );
-                                    } catch (Exception e ) {
-                                        lMarketOperation.setPrice( 0.0 );
-                                        lMarketOperation.setVolume( 0 );
-                                    }
+                                String lTypeOfOperation = getTagValue( lMessages[ i ], "269" );
+                                TMarketOperation lMarketOperation = new TMarketOperation();                                            
+                                try{
+                                    lMarketOperation.setPrice( Double.parseDouble( getTagValue( lMessages[ i ], "270" ) ) );
+                                    lMarketOperation.setVolume( Integer.parseInt( getTagValue( lMessages[ i ], "271" ) ) );
+                                } catch (Exception e ) {
+                                    lMarketOperation.setPrice( 0.0 );
+                                    lMarketOperation.setVolume( 0 );
+                                }
 
-                                    if( lTypeOfOperation.equals("1") ) {
-                                        lAsks.add( lMarketOperation );	
-                                    }
-                                    
-                                    if( lTypeOfOperation.equals("0") ) {
-                                        lBids.add( lMarketOperation );	
-                                    }
-                                    lMessages[ i ] = lMessages[ i ].substring( "269".length(), lMessages[ i ].length( ) );
+                                if( lTypeOfOperation.equals("1") ) {
+                                    lAsks.add( lMarketOperation );	
+                                }
+
+                                if( lTypeOfOperation.equals("0") ) {
+                                    lBids.add( lMarketOperation );	
+                                }
+                                lMessages[ i ] = lMessages[ i ].substring( "269".length(), lMessages[ i ].length( ) );
                             }
                         }
 

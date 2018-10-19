@@ -46,7 +46,7 @@ public class TOkExMDCollector extends TAbstractMkDataCollector implements TWebSo
     private Map< String, String > fParametersMap;
 
     private TNormalWebSocket fWsDepthPoint;
-    Thread fPingThread;
+    Thread fPingThread = null;
     private boolean fIsOpened;
     private boolean fIsClosed;
     private int fMessageNumber;
@@ -92,10 +92,6 @@ public class TOkExMDCollector extends TAbstractMkDataCollector implements TWebSo
 
         fDepthRespone = "wss://real.okex.com:10441/websocket";
      
-       // lDepthRespone += String.format("%s@depth/", ("ETHBTC").toLowerCase());
-      //  lDepthRespone += String.format("%s@trade/", ("ETHBTC").toLowerCase());
-      //  initializeDepthCache( ("ETHBTC") );
-        String lMessageToSend="";
         ConnectToServer();
         if( fDepthRespone != null && fInstruments!=null ){            
             for( String[] lRes:fInstruments ){
@@ -103,40 +99,35 @@ public class TOkExMDCollector extends TAbstractMkDataCollector implements TWebSo
                 String lIsin = lRes[1];
                 
                 fWsDepthPoint.sendMessage( "[{'event':'addChannel','channel':'ok_sub_spot_"+lIsin+"_depth'},{'event':'addChannel','channel':'ok_sub_spot_"+lIsin+"_deals'}]");
- 
-            //    System.out.println("[{'event':'addChannel','channel':'ok_sub_spot_"+lIsin+"_depth'},{'event':'addChannel','channel':'ok_sub_spot_"+lIsin+"_deals'}]");
-                
-              //  fWsDepthPoint.sendMessage( "[{'event':'addChannel','channel':'ok_sub_spot_"+lIsin+"_deals'}]");
     
             }              
         }
-        
-    //      fWsDepthPoint.sendMessage( lMessageToSend);
-    //      lMessageToSend = lMessageToSend.substring(0, lMessageToSend.length()-1);
-    //      lMessageToSend+="]";
-    //     fWsDepthPoint.sendMessage( lMessageToSend); 
-    //   fWsDepthPoint.sendMessage( "{'event':'addChannel','channel':'ok_sub_spot_"+lIsin+"_depth'}" ); 
-    //   fWsDepthPoint.sendMessage( "{'event':'addChannel','channel':'ok_sub_spot_"+lIsin+"_deals'}");
-        fPingThread = new Thread(new Runnable(){
-            @Override
-            public void run() {
-                while( fIsClosed == false ){
-                    
-                    try {
-                        Thread.sleep(1000*30);
-                        
-                    } catch (InterruptedException ex) {
-                        Logger.getLogger(TOkExMDCollector.class.getName()).log(Level.SEVERE, null, ex);
+       
+        if( fPingThread == null ) {
+            fPingThread = new Thread(new Runnable(){
+                @Override
+                public void run() {
+                    while( fIsClosed == false ){
+                        fLastMessageSecondPassed++;
+                        try {
+                            Thread.sleep(1000*30);
+                        } catch (InterruptedException ex) {
+                            Logger.getLogger(TOkExMDCollector.class.getName()).log(Level.SEVERE, null, ex);
+                        }
+
+                        if( fLastMessageSecondPassed > 2 ){
+                            fLastMessageSecondPassed=0L;
+                            Reconnect();
+                            
+                        }
+                        fWsDepthPoint.sendMessage("{'event':'ping'}");
+                        Log("okex ping!");
                     }
-                    
-                    fWsDepthPoint.sendMessage("{'event':'ping'}");
-                    Log("okex ping!");
                 }
-            }
-            
-        });
-        
-        fPingThread.start();
+            });
+
+            fPingThread.start();
+        }
         
     }
     
@@ -160,6 +151,7 @@ public class TOkExMDCollector extends TAbstractMkDataCollector implements TWebSo
 
         fWsDepthPoint = new TNormalWebSocket( fDepthRespone, this );
         while( !fWsDepthPoint.isConnected( ) ){
+             Log("tryingToConnect");
             try {
                 Thread.sleep( fConnectionTryingDelay );
             } catch (InterruptedException ex) {
@@ -291,7 +283,8 @@ public class TOkExMDCollector extends TAbstractMkDataCollector implements TWebSo
     public boolean isEnabled( ) {
         return true;//TODO make connector diagnostic!!!
     }
-
+    
+    long fLastMessageSecondPassed = 0L;
     @Override
     public void onMessage(String aMessage) {
       //  System.out.println(aMessage);
@@ -305,7 +298,7 @@ public class TOkExMDCollector extends TAbstractMkDataCollector implements TWebSo
         }else if( aMessage.contains( "Opened!" ) ){
             fIsOpened = true;
         }else{
-
+            fLastMessageSecondPassed = 0;
             try{
                 JSONArray lResponseArray = new JSONArray( aMessage );
                 for( int i=0; i<lResponseArray.length(); i++ ){

@@ -108,21 +108,39 @@ public class TBinanceMDCollector extends TAbstractMkDataCollector implements TWe
         this.depthCache.put( symbol, lDepthCache );
     }
 
+    Thread fPingThread = null;
+    
     @Override
     public void run( ) {
 
         fDepthRespone = "wss://stream.binance.com:9443/stream?streams=";
 
+        if( fPingThread == null ){
+            fPingThread = new Thread(new Runnable(){
+                @Override
+                public void run() {
+                   while ( !fIsClosed ){
+                       fMessageDelayPassed++;
+                       try {
+                           Thread.sleep(60000);
+                       } catch (InterruptedException ex) {                          
+                       }
+                       
+                       if( fMessageDelayPassed > 1 ){
+                           fMessageDelayPassed=0;
+                           Reconnect();
+                       }
+                   }
+                }
+            });
+            fPingThread.start();
+        }
+        
         for( String[] lRes:fInstruments ){
-
             fDepthRespone += String.format("%s@depth/", lRes[1].toLowerCase());
             fDepthRespone += String.format("%s@trade/", lRes[1].toLowerCase());
             initializeDepthCache( lRes[1] );
-
         }
-       // lDepthRespone += String.format("%s@depth/", ("ETHBTC").toLowerCase());
-      //  lDepthRespone += String.format("%s@trade/", ("ETHBTC").toLowerCase());
-      //  initializeDepthCache( ("ETHBTC") );
 
         fDepthRespone = fDepthRespone.substring( 0, fDepthRespone.length() - 1 );
 
@@ -284,6 +302,8 @@ public class TBinanceMDCollector extends TAbstractMkDataCollector implements TWe
         depthCache = new HashMap<>();
         run();
     }
+     
+    long fMessageDelayPassed = 0L;
     
     @Override
     public void onMessage(String aMessage) {
@@ -299,6 +319,7 @@ public class TBinanceMDCollector extends TAbstractMkDataCollector implements TWe
         }else if( aMessage.contains( "Opened!" ) ){
             
         }else {
+            fMessageDelayPassed = 0;
             JSONObject lResponse = new JSONObject( aMessage );
             JSONObject lData = lResponse.getJSONObject("data");
             if(lData.getString("e").equals("depthUpdate")){
