@@ -38,7 +38,9 @@ public class TFixCollector extends TAbstractMkDataCollector{
 	private boolean fIsClosed;
 	private int fMessageNumber;
 	private SocketChannel fSocket;
-
+        private boolean fNeedReconnect=false;
+        private Thread fHeartBeatThread = null;
+        
 	public TFixCollector( Map< String, String > aParametersMap ) {
             super( );
             fParametersMap = aParametersMap;
@@ -58,6 +60,7 @@ public class TFixCollector extends TAbstractMkDataCollector{
                 fSocket.connect( new InetSocketAddress( fParametersMap.get( "host" ), Integer.parseInt( fParametersMap.get( "port" ) ) ) );
                 fSocket.configureBlocking( false );
                 oResuilt = true;
+                fNeedReconnect = false;
             } catch ( Exception e ) {
                 oResuilt = false;
                 Log( e.getLocalizedMessage( ) );
@@ -74,7 +77,7 @@ public class TFixCollector extends TAbstractMkDataCollector{
             } 
             return oResuilt;
         }
-        
+        int fNothingCameTime = 0;
         private boolean runConnector(){
             String lLoginMessage = "";
             boolean oIsNormalStopped = true;
@@ -88,47 +91,71 @@ public class TFixCollector extends TAbstractMkDataCollector{
             Log( lLoginMessage, 3 );
 
             if( fSocket != null ){
-                Thread lHeartBeat = new Thread (
-                new Runnable(  ) {
-                    public void run( ) {
-                        while( fIsClosed == false ) {
-                            try {
-                                Thread.sleep( 29000 );
-                            } catch ( InterruptedException e ) {
-                                // TODO Auto-generated catch block
-                                e.printStackTrace( );
+                if(fHeartBeatThread == null){
+                    fHeartBeatThread = new Thread (
+                    new Runnable(  ) {
+                        public void run( ) {
+                            while( fIsClosed == false && !fNeedReconnect ) {
+                                try {
+                                    Thread.sleep( 29000 );
+                                } catch ( InterruptedException e ) {
+                                    // TODO Auto-generated catch block
+                                    e.printStackTrace( );
+                                }
+                                String lHeartbeatStr = generateHeartBeatMessage( fParametersMap );
+                                if( !writeToSocket( lHeartbeatStr ) ){
+                                    fNeedReconnect = true;
+                                }
                             }
-                            String lHeartbeatStr = generateHeartBeatMessage( fParametersMap );
-                            writeToSocket( lHeartbeatStr );
                         }
-                    }
-                } );
-                
-                writeToSocket( lLoginMessage );
+                    } );
 
-                lHeartBeat.start( );
+                    writeToSocket( lLoginMessage );
+
+                    fHeartBeatThread.start( );
+                }
 
                 char[] lBuffer = new char[ Integer.parseInt( fParametersMap.get( "RCVBUF" ) ) ];
                 ByteBuffer buf = ByteBuffer.allocate( Integer.parseInt(fParametersMap.get( "RCVBUF" ) ) );
                 String lLocalBuffer = "";
                 String lIncomeString = "";
 
-                while ( fIsClosed == false ){
+                while ( fIsClosed == false && fNeedReconnect == false ){
 
                     int res = -1;
-                        try{
-                        res = fSocket.read( buf );
-                    }catch( Exception e ){   
+                    try{
+                        res = fSocket.read(buf);
+                        
+                    }catch( Exception e ){ 
+                        fNeedReconnect = true;
+                        break;
                     }
 
                     if( res <= 0 ){
 
                         try {
+                            if( !fSocket.socket().getLocalAddress().isReachable(5000) ){
+                                fNeedReconnect = true;
+                                break;
+                            }
+                        } catch (IOException ex) {
+                            Logger.getLogger(TFixCollector.class.getName()).log(Level.SEVERE, null, ex);
+                        }
+                        
+                        try {
                             Thread.sleep( 1000 );
+                            fNothingCameTime++;
                         } catch (InterruptedException ex) {
+                            
+                        }
+                        
+                        if( fNothingCameTime > 300 ){
+                            fNeedReconnect = true;
+                            break;
                         }
 
                     } else {
+                        fNothingCameTime=0;
                         //lBuffer = buf.array();
                         lIncomeString = (new String( buf.array() )).substring( 0, res );
                         buf.clear();
@@ -171,20 +198,23 @@ public class TFixCollector extends TAbstractMkDataCollector{
             } catch(Exception e){
                 Log( e.getMessage(), 0 );
             }
-            return oIsNormalStopped;
+            
+            return (!fNeedReconnect);
         }
         
 	//13.08.2015 11:10:46.236	fixd	Send	8=FIX.4.29=7635=A98=0108=30141=Y34=149=SYNTRX52=20150813-08:10:46.04656=BCSMDPUMP10=2108=FIX.4.29=16035=V146=155=ATAD22=448=US6708312052207=XLON263=1264=10265=0267=2269=0269=1262=fixd#113796848#034=249=SYNTRX52=20150813-08:10:46.21656=BCSMDPUMP10=0478=FIX.4.29=15935=V146=155=GAZ22=448=US36829G1076207=XLON263=1264=10265=0267=2269=0269=1262=fixd#113796848#134=349=SYNTRX52=20150813-08:10:46.21656=BCSMDPUMP10=0328=FIX.4.29=16035=V146=155=HYDR22=448=US4662941057207=XLON263=1264=10265=0267=2269=0269=1
 	public void run( ) {
 
             while( !fIsClosed ){
+                Log("connecting");
                 boolean lServerConnected = ConnectToServer();
                 boolean IsNormalClosed = false;
                 if( lServerConnected ){
+                    Log("connected!");
                     fSleepTime = 1000L;
                     IsNormalClosed = runConnector();
                 }
-
+                fHeartBeatThread = null;
                 if( !IsNormalClosed ){
                     if( fSleepTime < 60000L ){
                         fSleepTime *= 2;
@@ -200,23 +230,26 @@ public class TFixCollector extends TAbstractMkDataCollector{
         
         long fSleepTime = 1000L;
         
-        private void writeToSocket( String aMessage ) {
+        private boolean writeToSocket( String aMessage ) {
             ByteBuffer buf = ByteBuffer.allocate( aMessage.getBytes().length );
             buf.clear();
             buf.put( aMessage.getBytes( ) );
             buf.flip();
-
-            while( buf.hasRemaining( ) ) {
+            boolean oSended=false;
+            while(!fNeedReconnect && buf.hasRemaining( ) ) {
                 try {
                     fSocket.write( buf );
+                    oSended=true;
                     Log( "sending " + aMessage );
                 } catch (IOException ex) {
                     Log(  ex.getLocalizedMessage( ) );
+                    oSended = false;
                     break;
                 }
             }
 
-            TAsyncLogQueue.getInstance( ).AddRecord( "sended " + aMessage );
+            TAsyncLogQueue.getInstance( ).AddRecord( "sended " + aMessage + " resuilt "+ oSended );
+            return oSended;
         }
 	
 	public void parseResponse( String aResponse ){
